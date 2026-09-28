@@ -1,6 +1,9 @@
 /* Plan creation, algorithm eligibility, cost model and selection. */
 #include <math.h>
+#include <limits.h>
 #include <omp.h>
+#include <pthread.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,25 +21,34 @@ const ug_machine ug_target = {
     .l2_e_bytes_per_core = 1.0 * 1024 * 1024,
 };
 
+/* One-time initialisation of every lazily computed global (F6: these raced when the
+ * first plans were created concurrently). */
+static ug_machine g_host;
+static int g_isa_ok;
+static pthread_once_t g_once = PTHREAD_ONCE_INIT;
+static void costmodel_env(void);
+
+static void init_once(void)
+{
+    ug_cpu_info ci;
+    ug_cpu_detect(&ci);
+    if (ci.is_arrow_lake_s) {
+        g_host = ug_target;
+    } else {
+        g_host = (ug_machine){.p_cores = omp_get_num_procs(), .e_cores = 0, .p_ghz = 3.0, .e_ghz = 0,
+                              .fma_mac_per_cycle = 16.0, .dram_gbs = 20.0, .core_gbs = 10.0,
+                              .l3_bytes = 32.0 * 1024 * 1024, .l2_p_bytes = 1024.0 * 1024,
+                              .l2_e_bytes_per_core = 0};
+    }
+    if (ci.l3_bytes > 0) g_host.l3_bytes = (double)ci.l3_bytes;  /* D0: measured beats spec */
+    g_isa_ok = ci.avx2 && ci.fma;  /* ug_cpu_detect also checks the OS saves YMM state */
+    costmodel_env();
+}
+
 const ug_machine *ug_machine_get(void)
 {
-    static ug_machine host;
-    static int init = 0;
-    if (!init) {
-        ug_cpu_info ci;
-        ug_cpu_detect(&ci);
-        if (ci.is_arrow_lake_s) {
-            host = ug_target;
-        } else {
-            host = (ug_machine){.p_cores = omp_get_num_procs(), .e_cores = 0, .p_ghz = 3.0, .e_ghz = 0,
-                                .fma_mac_per_cycle = 16.0, .dram_gbs = 20.0, .core_gbs = 10.0,
-                                .l3_bytes = 32.0 * 1024 * 1024, .l2_p_bytes = 1024.0 * 1024,
-                                .l2_e_bytes_per_core = 0};
-        }
-        if (ci.l3_bytes > 0) host.l3_bytes = (double)ci.l3_bytes;  /* D0: measured beats spec */
-        init = 1;
-    }
-    return &host;
+    pthread_once(&g_once, init_once);
+    return &g_host;
 }
 
 /* Cost-model constants: core clock cycles per feature unit. Defaults were fitted
@@ -57,25 +69,42 @@ static double CM[UG_CM_NFEAT] = {
 void ug_costmodel_get(double c[UG_CM_NFEAT]) { memcpy(c, CM, sizeof CM); }
 void ug_costmodel_set(const double c[UG_CM_NFEAT]) { memcpy(CM, c, sizeof CM); }
 
-static void costmodel_env(void)
+static void costmodel_env(void) /* called once, from init_once */
 {
-    static int done = 0;
-    if (done) return;
-    done = 1;
     const char *path = getenv("UGCONV_COSTMODEL");
     if (!path) return;
     FILE *f = fopen(path, "r");
     if (!f) return;
     double c[UG_CM_NFEAT];
     int n = 0;
-    while (n < UG_CM_NFEAT && fscanf(f, "%lf%*[^\n]", &c[n]) == 1) ++n;
+    while (n < UG_CM_NFEAT && fscanf(f, "%lf%*[^\n]", &c[n]) == 1 && isfinite(c[n]) && c[n] >= 0) ++n;
     fclose(f);
-    if (n == UG_CM_NFEAT) ug_costmodel_set(c);
+    if (n == UG_CM_NFEAT) ug_costmodel_set(c); /* all 12 finite and >= 0, else keep defaults */
 }
+
+/* Test seam: make exactly the n-th ug_malloc call (0-based, counted from the call to
+ * ug_test_fail_alloc_at) return NULL; n < 0 disables. Used by tests/test_regression.c
+ * to prove every allocation failure is reported instead of crashing. */
+static long g_alloc_count = 0, g_fail_at = -1;
+void ug_test_fail_alloc_at(long n)
+{
+    __atomic_store_n(&g_alloc_count, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&g_fail_at, n, __ATOMIC_SEQ_CST);
+}
+long ug_test_alloc_count(void) { return __atomic_load_n(&g_alloc_count, __ATOMIC_SEQ_CST); }
+/* Persistent variant: every request larger than n bytes fails (0 disables). */
+static size_t g_fail_over = 0;
+void ug_test_fail_alloc_over(size_t n) { __atomic_store_n(&g_fail_over, n, __ATOMIC_SEQ_CST); }
 
 void *ug_malloc(size_t bytes)
 {
     void *p = NULL;
+    const long idx = __atomic_fetch_add(&g_alloc_count, 1, __ATOMIC_RELAXED);
+    if (idx == __atomic_load_n(&g_fail_at, __ATOMIC_RELAXED)) return NULL;
+    const size_t over = __atomic_load_n(&g_fail_over, __ATOMIC_RELAXED);
+    if (over && bytes > over) return NULL;
+    /* F8: rounding up must not wrap, and no C object may exceed PTRDIFF_MAX */
+    if (bytes > (size_t)PTRDIFF_MAX - UG_ALIGN) return NULL;
     if (bytes == 0) bytes = UG_ALIGN;
     if (posix_memalign(&p, UG_ALIGN, (bytes + UG_ALIGN - 1) / UG_ALIGN * UG_ALIGN)) return NULL;
     return p;
@@ -106,12 +135,22 @@ const char *ug_algo_name(ug_algo a)
     return "?";
 }
 
-static int desc_valid(const ug_conv_desc *d)
+/* Shape contract, see ugconv.h. Every int product the kernels form must fit in int. */
+int ug_desc_valid(const ug_conv_desc *d)
 {
-    return d->N > 0 && d->C > 0 && d->H > 0 && d->W > 0 && d->K > 0 && d->R > 0 && d->S > 0 &&
-           d->stride_h > 0 && d->stride_w > 0 && d->pad_h >= 0 && d->pad_w >= 0 &&
-           d->pad_h < d->R && d->pad_w < d->S && ug_out_h(d) > 0 && ug_out_w(d) > 0;
+    if (!d) return 0;
+    const long long LIM = 1LL << 24;
+    const long long v[] = {d->N, d->C, d->H, d->W, d->K, d->R, d->S, d->stride_h, d->stride_w};
+    for (unsigned i = 0; i < sizeof v / sizeof v[0]; ++i)
+        if (v[i] < 1 || v[i] > LIM) return 0;
+    if (d->pad_h < 0 || d->pad_w < 0 || d->pad_h > LIM || d->pad_w > LIM) return 0;
+    const long long P = ug_out_h(d), Q = ug_out_w(d);
+    if (P < 1 || Q < 1) return 0;                     /* kernel does not fit (F2) */
+    if ((long long)d->C * d->R * d->S > INT_MAX) return 0;
+    if (P * Q > INT_MAX || (long long)d->H * d->W > INT_MAX) return 0;
+    return 1;
 }
+#define desc_valid ug_desc_valid
 
 int ug_algo_eligible(const ug_conv_desc *d, ug_algo a)
 {
@@ -199,7 +238,6 @@ static double capacity(const ug_machine *m, int nt)
 double ug_algo_cost(const ug_conv_desc *d, ug_algo a, int nthreads)
 {
     double f[UG_CM_NFEAT], bytes;
-    costmodel_env();
     const ug_machine *mc = ug_machine_get();
     if (nthreads <= 0) nthreads = mc->p_cores + mc->e_cores;
     if (ug_costmodel_features(d, a, nthreads, f, &bytes)) return -1.0;
@@ -255,13 +293,8 @@ ug_conv_plan *ug_conv_plan_create(const ug_conv_desc *d, const float *w, const f
                                   int relu, ug_algo algo, int nthreads)
 {
     if (!desc_valid(d) || !w) return NULL;
-    static int isa_ok = -1;
-    if (isa_ok < 0) {
-        ug_cpu_info ci;
-        ug_cpu_detect(&ci);
-        isa_ok = ci.avx2 && ci.fma;
-    }
-    if (!isa_ok) return NULL; /* kernels are AVX2+FMA */
+    pthread_once(&g_once, init_once);
+    if (!g_isa_ok) return NULL; /* kernels are AVX2+FMA */
     if (nthreads <= 0) nthreads = omp_get_max_threads();
     if (algo == UG_ALGO_AUTO) algo = ug_select_algo(d, nthreads);
     if (algo != UG_ALGO_TUNE) {
@@ -281,14 +314,15 @@ ug_conv_plan *ug_conv_plan_create(const ug_conv_desc *d, const float *w, const f
         if (!ug_algo_eligible(d, cand[i])) continue;
         ug_conv_plan *p = plan_create_fixed(d, w, bias, relu, cand[i], nthreads);
         if (!p) continue;
-        ug_conv_execute(p, x, y);
         double t = 1e300;
-        for (int rep = 0; rep < 3; ++rep) {
+        int rc = ug_conv_execute(p, x, y); /* warm-up */
+        for (int rep = 0; rep < 3 && rc == 0; ++rep) {
             double t0 = omp_get_wtime();
-            ug_conv_execute(p, x, y);
+            rc = ug_conv_execute(p, x, y);
             double dt = omp_get_wtime() - t0;
             if (dt < t) t = dt;
         }
+        if (rc) { ug_conv_plan_destroy(p); continue; } /* F11: never pick a failing candidate */
         if (t < bt) { bt = t; ug_conv_plan_destroy(best); best = p; }
         else ug_conv_plan_destroy(p);
     }

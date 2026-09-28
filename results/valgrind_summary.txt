@@ -1,0 +1,11 @@
+Valgrind memcheck, pure-AVX2 build (make VNNI=emu, -g), OMP_NUM_THREADS=2,
+--track-origins=yes --leak-check=full --errors-for-leak-kinds=definite.
+First four lines: build taken right after the F1-F12 fixes. Later lines: final code.
+test_regression exit=0 32/32 regression checks passed | ==14824== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+test_qconv exit=0 3706/3706 passed | ==15829== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+test_stress exit=0 34/34 stress checks passed | ==18924== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+test_conv exit=0 2326/2326 passed | ==20661== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+
+final-code test_regression exit=99 42/42 regression checks passed | ==24136== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)   <- "fishy size" on the deliberate ug_malloc(SIZE_MAX/2) test; fixed by the PTRDIFF_MAX guard (next line)
+final-code test_stress exit=0 34/34 stress checks passed | ==25141== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+final-code (after PTRDIFF_MAX guard) test_regression exit=0 42/42 regression checks passed | ==26666== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

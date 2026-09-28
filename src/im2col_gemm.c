@@ -113,7 +113,7 @@ void ug_gemm_blocking(const ug_conv_desc *d, int nt, ug_gemm_blk *b)
     b->KC = ug_ceil_div(CRS, nkc);
     /* Work decomposition: >= 3 items per thread for hybrid (P/E) load balance. */
     const int want = nt > 1 ? 3 * nt : 1; /* only split for parallelism */
-    int NCb = ug_min(ug_round_up(PQ, UG_NR), GEMM_NC);
+    int NCb = ug_max(UG_NR, ug_min(ug_round_up(PQ, UG_NR), GEMM_NC)); /* >= 16 even if PQ were 0 */
     if (d->N * ug_ceil_div(PQ, NCb) < want) {
         int per_img = ug_ceil_div(want, d->N);
         NCb = ug_max(48, ug_round_up(ug_ceil_div(PQ, per_img), UG_NR));
@@ -140,12 +140,18 @@ int ug_gemm_execute(const ug_conv_plan *p, const float *in, float *out)
     ug_gemm_blocking(d, nt, &bk);
     const int KC = bk.KC, NCb = bk.NCb, nblk = bk.nblk, mblk = bk.mblk, pan_per_mblk = bk.pan_per_mblk;
     const int items = N * nblk * mblk;
+    int err = 0;
 
 #pragma omp parallel num_threads(nt)
     {
         float *buf = ug_malloc((size_t)KC * NCb * sizeof(float));
+        if (!buf) {
+#pragma omp atomic write
+            err = 1;
+        }
 #pragma omp for schedule(dynamic, 1)
         for (int it = 0; it < items; ++it) {
+            if (!buf) continue; /* F5: report the failure, never dereference NULL */
             const int n = it / (nblk * mblk);
             const int rem = it % (nblk * mblk);
             const int nb = rem / mblk, mb = rem % mblk;
@@ -176,5 +182,5 @@ int ug_gemm_execute(const ug_conv_plan *p, const float *in, float *out)
         }
         ug_free(buf);
     }
-    return 0;
+    return err ? -1 : 0;
 }

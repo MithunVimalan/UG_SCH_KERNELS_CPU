@@ -1,6 +1,7 @@
 /* INT8 plan creation, epilogues, quantisation helpers, selection. */
 #include <math.h>
 #include <omp.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,8 +23,9 @@ const char *ug_qalgo_name(ug_qalgo a)
 
 int ug_qalgo_eligible(const ug_conv_desc *d, ug_qalgo a)
 {
-    /* same shape rules as fp32 */
+    /* same shape rules as fp32, plus the exact-int32 bound on the reduction (F1) */
     if (!ug_algo_eligible(d, UG_ALGO_IM2COL_GEMM)) return 0;
+    if ((long long)d->C * d->R * d->S > UG_Q_MAX_CRS) return 0;
     switch (a) {
     case UG_QALGO_DIRECT:
     case UG_QALGO_IM2COL_GEMM: return 1;
@@ -81,8 +83,8 @@ void ug_q_epilogue16(const ug_qconv_plan *p, const ug_qout *o, int k, long off,
     __m256 f0 = _mm256_fmadd_ps(_mm256_cvtepi32_ps(v0), sc, bs);
     __m256 f1 = _mm256_fmadd_ps(_mm256_cvtepi32_ps(v1), sc, bs);
     if (p->relu) {
-        f0 = _mm256_max_ps(f0, _mm256_setzero_ps());
-        f1 = _mm256_max_ps(f1, _mm256_setzero_ps());
+        f0 = _mm256_max_ps(_mm256_setzero_ps(), f0); /* keeps NaN, like the fp32 path */
+        f1 = _mm256_max_ps(_mm256_setzero_ps(), f1);
     }
     if (o->kind == UG_QOUT_F32) {
         float *dst = (float *)o->base + off;
@@ -97,11 +99,18 @@ void ug_q_epilogue16(const ug_qconv_plan *p, const ug_qout *o, int k, long off,
         }
         return;
     }
-    /* u8: round-to-nearest-even (MXCSR default) == nearbyintf in the reference */
+    /* u8: round-to-nearest-even (MXCSR default) == nearbyintf in the reference.
+     * Clamp in float first (F3): cvtps_epi32 returns INT_MIN for |x| >= 2^31, which
+     * would turn a huge positive value into 0. With out_zp in [0,255], any value
+     * outside [-512, 512] saturates the same way after the integer clamp; NaN -> 0
+     * (max_ps returns the second operand), matching the reference. */
     const __m256 inv = _mm256_set1_ps(o->inv_out_scale);
+    const __m256 lo = _mm256_set1_ps(-512.f), hi = _mm256_set1_ps(512.f);
     const __m256i zp = _mm256_set1_epi32(o->out_zp);
-    __m256i q0 = _mm256_add_epi32(_mm256_cvtps_epi32(_mm256_mul_ps(f0, inv)), zp);
-    __m256i q1 = _mm256_add_epi32(_mm256_cvtps_epi32(_mm256_mul_ps(f1, inv)), zp);
+    __m256 s0 = _mm256_min_ps(_mm256_max_ps(_mm256_mul_ps(f0, inv), lo), hi);
+    __m256 s1 = _mm256_min_ps(_mm256_max_ps(_mm256_mul_ps(f1, inv), lo), hi);
+    __m256i q0 = _mm256_add_epi32(_mm256_cvtps_epi32(s0), zp);
+    __m256i q1 = _mm256_add_epi32(_mm256_cvtps_epi32(s1), zp);
     q0 = _mm256_min_epi32(_mm256_max_epi32(q0, _mm256_setzero_si256()), _mm256_set1_epi32(255));
     q1 = _mm256_min_epi32(_mm256_max_epi32(q1, _mm256_setzero_si256()), _mm256_set1_epi32(255));
     int32_t t[16] __attribute__((aligned(32)));
@@ -111,20 +120,24 @@ void ug_q_epilogue16(const ug_qconv_plan *p, const ug_qout *o, int k, long off,
     for (int j = 0; j < n; ++j) dst[j] = (uint8_t)t[j];
 }
 
-static int isa_supported(void)
+static int g_qisa_ok;
+static pthread_once_t g_qonce = PTHREAD_ONCE_INIT;
+
+static void qcostmodel_env(void);
+static void qinit_once(void) /* F6: one-time, thread-safe */
 {
     ug_cpu_info ci;
-    ug_cpu_detect(&ci);
-    if (!ci.avx2 || !ci.fma) return 0;
+    ug_cpu_detect(&ci); /* avx2/fma/avx512f already include the OS-support (XGETBV) check */
+    int ok = ci.avx2 && ci.fma;
 #if defined(UG_VNNI_VEX)
-    return ci.avx_vnni;
+    ok = ok && ci.avx_vnni;
 #elif defined(UG_VNNI_EVEX)
     unsigned a, b, c, d;
     __asm__("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(7), "c"(0));
-    return ((c >> 11) & 1) && ((b >> 31) & 1); /* AVX512_VNNI, AVX512VL */
-#else
-    return 1;
+    ok = ok && ci.avx512f && ((c >> 11) & 1) && ((b >> 31) & 1); /* AVX512_VNNI, AVX512VL */
 #endif
+    g_qisa_ok = ok;
+    qcostmodel_env();
 }
 
 static void q_destroy_fields(ug_qconv_plan *p)
@@ -157,10 +170,10 @@ static ug_qconv_plan *q_create_fixed(const ug_conv_desc *d, const int8_t *w, con
         int real = k < d->K;
         p->oscale[k] = real ? in_scale * w_scale[k] : 0.f;
         p->bias[k] = (real && bias) ? bias[k] : 0.f;
-        int32_t s = 0;
+        long long s = 0; /* |in_zp * s| <= 255*128*CRS < 2^31 by the F1 bound: no overflow */
         if (real)
             for (long i = 0; i < CRS; ++i) s += w[k * CRS + i];
-        p->zcorr[k] = in_zp * s;
+        p->zcorr[k] = (int32_t)(in_zp * s);
     }
     int rc = -1;
     switch (algo) {
@@ -188,9 +201,8 @@ ug_qconv_plan *ug_qconv_plan_create(const ug_conv_desc *d, const signed char *w,
                                     const float *bias, int relu, float in_scale, int in_zp,
                                     ug_qalgo algo, int nthreads)
 {
-    static int isa_ok = -1;
-    if (isa_ok < 0) isa_ok = isa_supported();
-    if (!isa_ok || !w || !w_scale || in_zp < 0 || in_zp > 255) return NULL;
+    pthread_once(&g_qonce, qinit_once);
+    if (!g_qisa_ok || !w || !w_scale || in_zp < 0 || in_zp > 255) return NULL;
     if (!ug_qalgo_eligible(d, UG_QALGO_IM2COL_GEMM)) return NULL;
     if (nthreads <= 0) nthreads = omp_get_max_threads();
     if (algo == UG_QALGO_AUTO) algo = ug_qselect_algo(d, nthreads);
@@ -210,13 +222,14 @@ ug_qconv_plan *ug_qconv_plan_create(const ug_conv_desc *d, const signed char *w,
         if (!ug_qalgo_eligible(d, cand[i])) continue;
         ug_qconv_plan *p = q_create_fixed(d, (const int8_t *)w, w_scale, bias, relu, in_scale, in_zp, cand[i], nthreads);
         if (!p) continue;
-        ug_qconv_execute_f32(p, x, y);
         double t = 1e300;
-        for (int rep = 0; rep < 3; ++rep) {
+        int rc = ug_qconv_execute_f32(p, x, y); /* warm-up */
+        for (int rep = 0; rep < 3 && rc == 0; ++rep) {
             double t0 = omp_get_wtime();
-            ug_qconv_execute_f32(p, x, y);
+            rc = ug_qconv_execute_f32(p, x, y);
             t = fmin(t, omp_get_wtime() - t0);
         }
+        if (rc) { ug_qconv_plan_destroy(p); continue; } /* F11 */
         if (t < bt) { bt = t; ug_qconv_plan_destroy(best); best = p; }
         else ug_qconv_plan_destroy(p);
     }
@@ -244,7 +257,7 @@ int ug_qconv_execute_f32(const ug_qconv_plan *p, const unsigned char *in, float 
 int ug_qconv_execute_u8(const ug_qconv_plan *p, const unsigned char *in, unsigned char *out,
                         float out_scale, int out_zp)
 {
-    if (!p || !in || !out || !(out_scale > 0)) return -1;
+    if (!p || !in || !out || !(out_scale > 0) || out_zp < 0 || out_zp > 255) return -1; /* F3 */
     ug_qout o = {UG_QOUT_U8, out, 1.f / out_scale, out_zp};
     return q_run(p, in, &o);
 }
@@ -313,22 +326,22 @@ int ug_qcostmodel_features(const ug_conv_desc *d, ug_qalgo a, double f[UG_QCM_NF
     return 0;
 }
 
+static void qcostmodel_env(void) /* called once, from qinit_once */
+{
+    const char *path = getenv("UGCONV_QCOSTMODEL");
+    FILE *fp = path ? fopen(path, "r") : NULL;
+    if (!fp) return;
+    double c[UG_QCM_NFEAT];
+    int n = 0;
+    while (n < UG_QCM_NFEAT && fscanf(fp, "%lf%*[^\n]", &c[n]) == 1 && isfinite(c[n]) && c[n] >= 0) ++n;
+    fclose(fp);
+    if (n == UG_QCM_NFEAT) ug_qcostmodel_set(c);
+}
+
 double ug_qalgo_cost(const ug_conv_desc *d, ug_qalgo a, int nthreads)
 {
     double f[UG_QCM_NFEAT];
-    static int env_done = 0;
-    if (!env_done) {
-        env_done = 1;
-        const char *path = getenv("UGCONV_QCOSTMODEL");
-        FILE *fp = path ? fopen(path, "r") : NULL;
-        if (fp) {
-            double c[UG_QCM_NFEAT];
-            int n = 0;
-            while (n < UG_QCM_NFEAT && fscanf(fp, "%lf%*[^\n]", &c[n]) == 1) ++n;
-            fclose(fp);
-            if (n == UG_QCM_NFEAT) ug_qcostmodel_set(c);
-        }
-    }
+    pthread_once(&g_qonce, qinit_once);
     if (ug_qcostmodel_features(d, a, f)) return -1.0;
     const ug_machine *mc = ug_machine_get();
     if (nthreads <= 0) nthreads = mc->p_cores + mc->e_cores;

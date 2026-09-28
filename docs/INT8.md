@@ -39,14 +39,17 @@ there is no exact int8 path to Winograd's 4x.
 
 ## 2. Verification ("debug every line")
 
+The later line-by-line review (docs/TEST_REPORT.md) found and fixed an int8 overflow
+beyond C·R·S = 65,793 (now rejected: `UG_Q_MAX_CRS`) and a u8 saturation bug.
+
 | Check | Result |
 |---|---|
-| Bit-exact vs scalar integer reference (s32, f32, u8 outputs; 24 fixed + 120 random shapes: C 1-300, K 1-70, H/W 1-40, R/S 1-7 independently, strides 1-3 per axis, pads, N 1-2; zero points 0/77/128/255/random; worst-case data x=255, w=−128; 1 and 3 threads; ReLU on/off; AUTO and TUNE; C=1800 range bound) | **3705/3705 pass** (`tests/test_qconv.c`) |
-| Same suite, pure-AVX2 emulation backend | 3705/3705 pass |
-| fp32 suite (now also stride-2 wide rows, TUNE, API checks) | 377/377 pass |
+| Bit-exact vs scalar integer reference (s32, f32, u8 outputs; 24 fixed + 120 random shapes: C 1-300, K 1-70, H/W 1-40, R/S 1-7 independently, strides 1-3 per axis, pads, N 1-2; zero points 0/77/128/255/random; worst-case data x=255, w=−128; 1 and 3 threads; ReLU on/off; AUTO and TUNE; C=1800 range bound) | **3706/3706 pass** (`tests/test_qconv.c`) |
+| Same suite, pure-AVX2 emulation backend | 3706/3706 pass |
+| fp32 suite (fixed + 100 random shapes, TUNE, API checks) | 2390/2390 pass |
 | AddressSanitizer + UndefinedBehaviorSanitizer, both suites (`make sanitize`) | pass, no reports |
 | Line coverage of the kernels (gcov) | q_gemm.c, q_direct.c, q_winograd.c, kernel_6x16.c, direct.c, winograd.c: **100%**; im2col_gemm.c: 100% after adding the stride-2 wide-row shape (it had never run before) |
-| Mutation test: 13 injected bugs (transforms, transposes, strided packs, tail thresholds, zero point, clamp) | **13/13 caught** (`tools/mutation_test.py`, `results/mutation_test.txt`) |
+| Mutation test: 13 injected kernel bugs + a revert of each review fix | **22/22 caught** (`tools/mutation_test.py`, `results/mutation_test.txt`) |
 | Lines not executed on the VM | Arrow Lake-only branches (`ug_target` machine table, P/E core-type query) |
 
 ## 3. Selection (cost model, same method as fp32)
@@ -184,7 +187,7 @@ relieves the Q1 direct kernel (measured ~65% of VNNI peak here, load-port bound 
 VM), and 24 cores. Re-run on the target:
 
 ```sh
-make ARCH=arrowlake && ./build/test_qconv          # must print 3705/3705 passed
+make ARCH=arrowlake && ./build/test_qconv          # must print 3706/3706 passed
 ./build/calibrate -int8 -o qcostmodel.txt && export UGCONV_QCOSTMODEL=$PWD/qcostmodel.txt
 OMP_WAIT_POLICY=PASSIVE ./build/bench_conv -t 24 -int8
 OMP_WAIT_POLICY=PASSIVE ./build/bench_conv -t 24 -e2e -int8

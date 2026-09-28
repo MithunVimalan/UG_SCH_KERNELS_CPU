@@ -34,7 +34,7 @@ endif
 OPENBLAS_CFLAGS ?= $(shell pkg-config --cflags openblas 2>/dev/null || echo -I/usr/include/x86_64-linux-gnu/openblas-pthread)
 OPENBLAS_LIBS ?= $(shell pkg-config --libs openblas 2>/dev/null || echo -lopenblas)
 
-all: build/libugconv.a build/test_conv build/test_qconv build/bench_conv build/calibrate
+all: build/libugconv.a build/test_conv build/test_qconv build/test_regression build/test_stress build/bench_conv build/calibrate
 
 build:
 	mkdir -p build
@@ -54,6 +54,12 @@ build/test_conv: tests/test_conv.c build/libugconv.a
 build/test_qconv: tests/test_qconv.c build/libugconv.a
 	$(CC) $(CFLAGS) $< build/libugconv.a $(LDLIBS) -o $@
 
+build/test_regression: tests/test_regression.c build/libugconv.a
+	$(CC) $(CFLAGS) $< build/libugconv.a $(LDLIBS) -o $@
+
+build/test_stress: tests/test_stress.c build/libugconv.a
+	$(CC) $(CFLAGS) $< build/libugconv.a $(LDLIBS) -lpthread -o $@
+
 # bench links OpenBLAS for the im2col+SGEMM baseline when available (make NO_OPENBLAS=1 to skip)
 ifeq ($(NO_OPENBLAS),1)
 build/bench_conv: bench/bench_conv.c bench/layers.h build/libugconv.a
@@ -66,22 +72,34 @@ endif
 build/calibrate: tools/calibrate.c bench/layers.h build/libugconv.a
 	$(CC) $(CFLAGS) $< build/libugconv.a $(LDLIBS) -o $@
 
-test: build/test_conv build/test_qconv
-	./build/test_conv
-	./build/test_qconv
+test: build/test_conv build/test_qconv build/test_regression build/test_stress
+	./build/test_conv | tail -1
+	./build/test_qconv | tail -1
+	./build/test_regression | tail -1
+	./build/test_stress | tail -1
 
 # AddressSanitizer + UndefinedBehaviorSanitizer build of both test suites (separate dir)
 SAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 sanitize:
-	$(MAKE) -s BUILD_SAN=1 EXTRA_CFLAGS="$(SAN)" EXTRA_LDFLAGS="-fsanitize=address,undefined" clean-objs build/test_conv build/test_qconv
+	$(MAKE) -s BUILD_SAN=1 EXTRA_CFLAGS="$(SAN)" EXTRA_LDFLAGS="-fsanitize=address,undefined" clean-objs build/test_conv build/test_qconv build/test_regression build/test_stress
 	./build/test_conv | tail -1
 	./build/test_qconv | tail -1
+	ASAN_OPTIONS=allocator_may_return_null=1 ./build/test_regression | tail -1   # malloc returns NULL, as in glibc
+	./build/test_stress | tail -1
 	$(MAKE) -s clean-objs
 
+# ThreadSanitizer: concurrent first use of the library (F6). Separate build dir.
+tsan:
+	mkdir -p build/tsan
+	for f in $(SRC); do $(CC) -O1 -g -fsanitize=thread -std=c11 -D_POSIX_C_SOURCE=200809L $(ARCHFLAGS) -fopenmp -Iinclude -c $$f -o build/tsan/$$(basename $$f .c).o || exit 1; done
+	for f in $(QSRC); do $(CC) -O1 -g -fsanitize=thread -std=c11 -D_POSIX_C_SOURCE=200809L $(ARCHFLAGS) $(QFLAGS) -fopenmp -Iinclude -c $$f -o build/tsan/$$(basename $$f .c).o || exit 1; done
+	$(CC) -O1 -g -fsanitize=thread $(ARCHFLAGS) -fopenmp -Iinclude tests/test_race.c build/tsan/*.o -lm -lpthread -o build/tsan/test_race
+	TSAN_OPTIONS=halt_on_error=0 ./build/tsan/test_race
+
 clean-objs:
-	rm -f build/*.o build/libugconv.a build/test_conv build/test_qconv
+	rm -f build/*.o build/libugconv.a build/test_conv build/test_qconv build/test_regression build/test_stress
 
 clean:
 	rm -rf build
 
-.PHONY: all test clean clean-objs sanitize
+.PHONY: all test clean clean-objs sanitize tsan

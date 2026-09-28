@@ -38,7 +38,7 @@ static inline void qdirect_tile(const uint8_t *X, const int8_t *wp, const long *
     __m256i c30 = _mm256_setzero_si256(), c31 = _mm256_setzero_si256();
     __m256i c40 = _mm256_setzero_si256(), c41 = _mm256_setzero_si256();
     __m256i c50 = _mm256_setzero_si256(), c51 = _mm256_setzero_si256();
-    const int32_t *a32 = (const int32_t *)wp;
+    const ug_i32_alias *a32 = (const ug_i32_alias *)wp;
 #pragma GCC unroll 4
     for (int q = 0; q < ntaps; ++q) {
         const uint8_t *src = X + off[q];

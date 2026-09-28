@@ -39,7 +39,7 @@ static inline void qkernel(int k4n, const int8_t *A, const uint8_t *B, int half,
     __m256i c30 = _mm256_setzero_si256(), c31 = _mm256_setzero_si256();
     __m256i c40 = _mm256_setzero_si256(), c41 = _mm256_setzero_si256();
     __m256i c50 = _mm256_setzero_si256(), c51 = _mm256_setzero_si256();
-    const int32_t *a32 = (const int32_t *)A;
+    const ug_i32_alias *a32 = (const ug_i32_alias *)A;
     if (!half) {
 #pragma GCC unroll 4
         for (int s = 0; s < k4n; ++s) {
@@ -163,12 +163,18 @@ int ug_qgemm_execute(const ug_qconv_plan *p, const uint8_t *in, const ug_qout *o
     mblk = ug_ceil_div(kpan, ppm);
     const int mc_pan = ug_max(1, QG_A_BUDGET / (p->CRS4 * UG_MR));
     const int items = N * nblk * mblk;
+    int err = 0;
 
 #pragma omp parallel num_threads(nt)
     {
         uint8_t *buf = ug_malloc((size_t)p->CRS4 * NCb);
+        if (!buf) {
+#pragma omp atomic write
+            err = 1;
+        }
 #pragma omp for schedule(dynamic, 1)
         for (int it = 0; it < items; ++it) {
+            if (!buf) continue; /* F5 */
             const int n = it / (nblk * mblk), rem = it % (nblk * mblk);
             const int nb = rem / mblk, mb = rem % mblk;
             const int n0 = nb * NCb, ncols = ug_min(NCb, PQ - n0);
@@ -196,5 +202,5 @@ int ug_qgemm_execute(const ug_qconv_plan *p, const uint8_t *in, const ug_qout *o
         }
         ug_free(buf);
     }
-    return 0;
+    return err ? -1 : 0;
 }

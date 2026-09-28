@@ -4,6 +4,10 @@
 #include "ug_internal.h"
 #include "vnni.h"
 
+/* F10: weights are int8/int16 arrays read 32 bits at a time; this type may alias
+ * any object (like char), so the loads are defined behaviour under strict aliasing. */
+typedef int32_t ug_i32_alias __attribute__((may_alias, aligned(4)));
+
 /* Output of one execute(): which epilogue, and the per-image base pointer. */
 enum { UG_QOUT_S32 = 0, UG_QOUT_F32 = 1, UG_QOUT_U8 = 2 };
 typedef struct {

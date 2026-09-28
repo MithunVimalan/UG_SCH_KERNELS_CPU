@@ -20,6 +20,10 @@
 
 #define UG_ALIGN 64
 void *ug_malloc(size_t bytes);
+void ug_test_fail_alloc_at(long n); /* test seam, see plan.c */
+int ug_desc_valid(const ug_conv_desc *d);
+long ug_test_alloc_count(void);
+void ug_test_fail_alloc_over(size_t n);
 void ug_free(void *p);
 
 static inline int ug_ceil_div(int a, int b) { return (a + b - 1) / b; }

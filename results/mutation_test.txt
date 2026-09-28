@@ -1,14 +1,23 @@
-CAUGHT  Winograd output scale            (src/q_winograd.c) -> 2917/3705 passed
-CAUGHT  B^T row 3                        (src/q_winograd.c) -> 2945/3705 passed
-CAUGHT  fast-path deinterleave           (src/q_winograd.c) -> 3509/3705 passed
-CAUGHT  A^T row 1                        (src/q_winograd.c) -> 3035/3705 passed
-CAUGHT  im2col byte transpose            (src/q_gemm.c) -> 2155/3705 passed
-CAUGHT  stride-2 even bytes              (src/q_gemm.c) -> 3577/3705 passed
-CAUGHT  half-kernel threshold            (src/q_gemm.c) -> 3577/3705 passed
-CAUGHT  direct tap offset (only S>6)     (src/q_direct.c) -> 3593/3705 passed
-CAUGHT  zero-point correction            (src/q_plan.c) -> 1295/3705 passed
-CAUGHT  u8 clamp at 0                    (src/q_plan.c) -> 1929/3705 passed
-CAUGHT  fp32 F4 input transpose          (src/winograd.c) -> 359/377 passed
-CAUGHT  fp32 stride-2 pack               (src/im2col_gemm.c) -> 359/377 passed
-CAUGHT  fp32 half-kernel threshold       (src/kernel_6x16.c) -> 368/377 passed
-13/13 mutants caught
+CAUGHT  Winograd output scale            (src/q_winograd.c) -> 3209/3706 passed
+CAUGHT  B^T row 3                        (src/q_winograd.c) -> 3233/3706 passed
+CAUGHT  fast-path deinterleave           (src/q_winograd.c) -> 3582/3706 passed
+CAUGHT  A^T row 1                        (src/q_winograd.c) -> 3300/3706 passed
+CAUGHT  im2col byte transpose            (src/q_gemm.c) -> 2486/3706 passed
+CAUGHT  stride-2 even bytes              (src/q_gemm.c) -> 3654/3706 passed
+CAUGHT  half-kernel threshold            (src/q_gemm.c) -> 3586/3706 passed
+CAUGHT  direct tap offset (only S>6)     (src/q_direct.c) -> 3614/3706 passed
+CAUGHT  zero-point correction            (src/q_plan.c) -> 1087/3706 passed
+CAUGHT  u8 clamp at 0                    (src/q_plan.c) -> 1950/3706 passed
+CAUGHT  fp32 F4 input transpose          (src/winograd.c) -> 2333/2390 passed
+CAUGHT  fp32 stride-2 pack               (src/im2col_gemm.c) -> 2372/2390 passed
+CAUGHT  fp32 half-kernel threshold       (src/kernel_6x16.c) -> 2356/2390 passed
+CAUGHT  F1 revert: no int8 CRS bound     (src/q_plan.c) -> 40/42 regression checks passed
+CAUGHT  F2 revert: truncating out_h      (include/ugconv.h) -> 41/42 regression checks passed
+CAUGHT  F3 revert: no float clamp        (src/q_plan.c) -> 41/42 regression checks passed
+CAUGHT  F4 revert: NaN-dropping ReLU     (src/kernel_6x16.c) -> 41/42 regression checks passed
+CAUGHT  F5 revert: unchecked scratch     (src/im2col_gemm.c) -> 40/42 regression checks passed
+CAUGHT  F8 revert: wrapping malloc       (src/plan.c) -> 41/42 regression checks passed
+CAUGHT  F9 revert: no C*R*S limit        (src/plan.c) -> 41/42 regression checks passed
+CAUGHT  F11 revert: TUNE times failures  (src/plan.c) -> 41/42 regression checks passed
+CAUGHT  B2 revert: NaN cost file accepted (src/plan.c) -> 40/42 regression checks passed
+22/22 mutants caught

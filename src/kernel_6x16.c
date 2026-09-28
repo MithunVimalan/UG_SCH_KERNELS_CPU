@@ -78,7 +78,7 @@ void ug_kernel_6x16(int kc, const float *A, const float *B, float *C, long ldc,
                 __m256 b = _mm256_broadcast_ss(bias + i);
                 v0 = _mm256_add_ps(v0, b);
                 v1 = _mm256_add_ps(v1, b);
-                if (relu) { v0 = _mm256_max_ps(v0, zero); v1 = _mm256_max_ps(v1, zero); }
+                if (relu) { v0 = _mm256_max_ps(zero, v0); v1 = _mm256_max_ps(zero, v1); } /* NaN-propagating, as the scalar edge path */
             }
             _mm256_storeu_ps(c, v0);
             _mm256_storeu_ps(c + 8, v1);

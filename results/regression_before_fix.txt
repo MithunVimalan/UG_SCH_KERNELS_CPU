@@ -1,0 +1,33 @@
+FAIL F1   int8 overflow beyond the bound -- C*R*S=66600 accepted by Q1-direct; centre = 2121143296, exact = -2173824000
+FAIL F1   int8 overflow beyond the bound -- C*R*S=66600 accepted by Q2-im2col+gemm; centre = 2121143296, exact = -2173824000
+PASS F1   int8 exactness at the bound -- C*R*S=65790 (bound) Q1-direct centre -2147385600 exact -2147385600
+PASS F1   int8 exactness at the bound -- C*R*S=65790 (bound) Q2-im2col+gemm centre -2147385600 exact -2147385600
+FAIL F2   kernel larger than padded input is rejected -- shape 0: H+2p=2 < R=3, ug_out_h()=1, accepted by 5 plan kinds
+FAIL F2   kernel larger than padded input is rejected -- shape 1: H+2p=6 < R=7, ug_out_h()=1, accepted by 5 plan kinds
+FAIL F3   u8 requantisation saturates -- rc 0, +3.2e9 -> 0 (want 255), -3.2e9 -> 0 (want 0)
+FAIL F3   out_zp outside [0,255] rejected -- execute_u8 with out_zp=300 returned 0 (want -1)
+FAIL F4   fp32 ReLU propagates NaN in every tile -- G1-direct: 63 receptive-field outputs lost the NaN, 0 extra NaN outputs
+FAIL F4   fp32 ReLU propagates NaN in every tile -- G2-im2col+gemm: 54 receptive-field outputs lost the NaN, 0 extra NaN outputs
+FAIL F4   fp32 ReLU propagates NaN in every tile -- G3-winograd-F4: 63 receptive-field outputs lost the NaN, 0 extra NaN outputs
+FAIL F4   fp32 ReLU propagates NaN in every tile -- G3-winograd-F2: 63 receptive-field outputs lost the NaN, 0 extra NaN outputs
+FAIL F4   int8 f32 epilogue ReLU propagates NaN -- Q1-direct: 735 of 735 outputs lost the NaN
+FAIL F4   int8 f32 epilogue ReLU propagates NaN -- Q2-im2col+gemm: 735 of 735 outputs lost the NaN
+FAIL F4   int8 f32 epilogue ReLU propagates NaN -- Q3-winograd-F2: 735 of 735 outputs lost the NaN
+FAIL F8   ug_malloc rejects sizes that wrap when rounded -- ug_malloc(SIZE_MAX-8) = 0x55b6db3f5f00, ug_malloc(SIZE_MAX) = 0x55b6db3f5f40 (want NULL, NULL)
+FAIL F9   int-overflowing shape is rejected -- shape 0 accepted: yes
+FAIL F9   int-overflowing shape is rejected -- shape 1 accepted: yes
+PASS F9   int-overflowing shape is rejected -- shape 2 accepted: no
+FAIL F12  padding >= kernel size works -- shape 0 (pad 3,3 vs kernel 3x3): 5 plans, rejected or wrong
+FAIL F12  padding >= kernel size works -- shape 1 (pad 4,2 vs kernel 3x3): 5 plans, rejected or wrong
+FAIL F12  padding >= kernel size works -- shape 2 (pad 6,5 vs kernel 5x5): 2 plans, rejected or wrong
+FAIL F12  padding >= kernel size works -- shape 3 (pad 2,2 vs kernel 1x1): 2 plans, rejected or wrong
+PASS F5   allocation failure is reported, never a crash -- G1-direct: 6 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- G2-im2col+gemm: 6 allocations failed one at a time; 2 crashed/hung, 0 returned success with wrong output (first at alloc #2); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- G3-winograd-F4: 13 allocations failed one at a time; 7 crashed/hung, 0 returned success with wrong output (first at alloc #3); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- G3-winograd-F2: 13 allocations failed one at a time; 7 crashed/hung, 0 returned success with wrong output (first at alloc #3); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- tune: 102 allocations failed one at a time; 74 crashed/hung, 0 returned success with wrong output (first at alloc #14); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- Q1-direct: 8 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- Q2-im2col+gemm: 8 allocations failed one at a time; 2 crashed/hung, 0 returned success with wrong output (first at alloc #4); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- Q3-winograd-F2: 15 allocations failed one at a time; 8 crashed/hung, 0 returned success with wrong output (first at alloc #5); fault-free run ok
+FAIL F5   allocation failure is reported, never a crash -- q-tune: 70 allocations failed one at a time; 41 crashed/hung, 0 returned success with wrong output (first at alloc #18); fault-free run ok
+5/32 regression checks passed

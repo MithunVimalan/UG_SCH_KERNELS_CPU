@@ -27,13 +27,17 @@ Q2 im2col+GEMM on `vpdpbusd` (u8 x s8), Q3 an exact integer Winograd F(2x2) on
 ```sh
 make                    # portable AVX2 build (x86-64-v3)
 make ARCH=arrowlake     # target build, -march=arrowlake-s (clang >= 18 / gcc >= 14)
-make test               # fp32 (377 runs vs fp64) + int8 (3705 bit-exact runs)
-make sanitize           # both suites under ASan + UBSan
-python3 tools/mutation_test.py   # 13 injected bugs, all must be caught
+make test               # fp32 2390 runs vs fp64, int8 3706 bit-exact, 42 regression, 34 stress
+make sanitize           # all four suites under ASan + UBSan
+make tsan               # concurrent first use under ThreadSanitizer
+python3 tools/mutation_test.py   # 22 injected bugs (incl. one revert per fix), all must be caught
 ./build/bench_conv -int8 [-e2e]  # int8 vs fp32 vs OpenBLAS
 ./build/bench_conv -t <threads> [-n vgg16|resnet50] [-e2e] [-naive] [-csv file]
 ./build/calibrate -o costmodel.txt && export UGCONV_COSTMODEL=$PWD/costmodel.txt
 ```
+
+Line-by-line review, defects found and fixed, and all tool results:
+[docs/TEST_REPORT.md](docs/TEST_REPORT.md).
 
 ## API
 

@@ -126,7 +126,7 @@ static inline void qw_kernel(int c2n, const int16_t *A, const int16_t *B, __m256
     __m256i c30 = _mm256_setzero_si256(), c31 = _mm256_setzero_si256();
     __m256i c40 = _mm256_setzero_si256(), c41 = _mm256_setzero_si256();
     __m256i c50 = _mm256_setzero_si256(), c51 = _mm256_setzero_si256();
-    const int32_t *a32 = (const int32_t *)A;
+    const ug_i32_alias *a32 = (const ug_i32_alias *)A;
 #pragma GCC unroll 4
     for (int s = 0; s < c2n; ++s) {
         __m256i b0 = _mm256_load_si256((const __m256i *)B);
@@ -208,8 +208,9 @@ int ug_qwino_execute(const ug_qconv_plan *p, const uint8_t *in, const ug_qout *o
     const long plane = (long)g.Hx * g.Wx;
     int16_t *X = ug_malloc((size_t)C * plane * sizeof(int16_t));
     if (!X) return -1;
+    int err = 0;
 
-    for (int n = 0; n < N; ++n) {
+    for (int n = 0; n < N && !err; ++n) {
         const uint8_t *x = in + (size_t)n * C * H * W;
         const ug_qout oi = ug_qout_image(o, n, img_elems);
 #pragma omp parallel num_threads(nt)
@@ -226,8 +227,13 @@ int ug_qwino_execute(const ug_qconv_plan *p, const uint8_t *in, const ug_qout *o
             }
             int16_t *V = ug_malloc((size_t)16 * vs * sizeof(int16_t));
             int32_t *M = ug_malloc((size_t)16 * ms * sizeof(int32_t));
+            if (!V || !M) {
+#pragma omp atomic write
+                err = 1;
+            }
 #pragma omp for schedule(dynamic, 1)
             for (int it = 0; it < items; ++it) {
+                if (!V || !M) continue; /* F5 */
                 const int tb = it / kblk, kb = it % kblk;
                 const int t0 = tb * TB, tcount = ug_min(TB, g.T - t0), npan = ug_ceil_div(tcount, 16);
                 const int k0 = kb * KB, kcount = ug_min(KB, p->Kp - k0);
@@ -271,5 +277,5 @@ int ug_qwino_execute(const ug_qconv_plan *p, const uint8_t *in, const ug_qout *o
         }
     }
     ug_free(X);
-    return 0;
+    return err ? -1 : 0;
 }

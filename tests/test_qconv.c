@@ -158,9 +158,17 @@ int main(int argc, char **argv)
         d.R = rint_(1, 7); d.S = rnd() % 2 ? d.R : rint_(1, 7);
         d.H = rint_(1, 40); d.W = rint_(1, 40);
         d.stride_h = rint_(1, 3); d.stride_w = rnd() % 2 ? d.stride_h : rint_(1, 3);
-        d.pad_h = rint_(0, d.R - 1); d.pad_w = rint_(0, d.S - 1);
+        d.pad_h = rint_(0, d.R + 1); d.pad_w = rint_(0, d.S + 1);   /* padding may exceed the kernel */
         if (rnd() % 3 == 0) { d.R = d.S = 3; d.stride_h = d.stride_w = 1; d.pad_h = d.pad_w = 1; } /* Winograd-eligible */
-        if (d.H + 2 * d.pad_h < d.R || d.W + 2 * d.pad_w < d.S) continue;
+        if (d.H + 2 * d.pad_h < d.R || d.W + 2 * d.pad_w < d.S) {
+            /* kernel does not fit: every plan kind must refuse the shape */
+            signed char w1[1] = {0};
+            float s1[1] = {1};
+            ug_qconv_plan *bad = ug_qconv_plan_create(&d, w1, s1, NULL, 0, 1.f, 0, UG_QALGO_AUTO, 1);
+            ++runs;
+            if (bad) { ++fails; printf("FAIL accepted a shape whose kernel does not fit\n"); ug_qconv_plan_destroy(bad); }
+            continue;
+        }
         if ((double)d.N * d.K * d.C * d.R * d.S * ug_out_h(&d) * ug_out_w(&d) > 4e7) continue;
         check_shape(&d, rint_(0, 255), rnd() % 8 == 0, verbose);
         ++nrand;

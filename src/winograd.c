@@ -230,7 +230,7 @@ static inline __attribute__((always_inline)) void output_tiles(const wgeo *g, co
         if (m == 4) at4(col, y); else at2(col, y);
         for (int yy = 0; yy < m; ++yy) {
             __m256 v = _mm256_add_ps(y[yy], b);
-            if (relu) v = _mm256_max_ps(v, zero);
+            if (relu) v = _mm256_max_ps(zero, v); /* keeps NaN */
             Y[yy * m + x] = v;
         }
     }
@@ -319,8 +319,9 @@ int ug_wino_execute(const ug_conv_plan *p, const float *in, float *out)
     const long plane = (long)g.Hx * g.Wx;
     float *X = ug_malloc((size_t)C * plane * sizeof(float));
     if (!X) return -1;
+    int err = 0;
 
-    for (int n = 0; n < N; ++n) {
+    for (int n = 0; n < N && !err; ++n) {
         const float *x = in + (size_t)n * C * H * W;
         float *yout = out + (size_t)n * K * PQ;
 #pragma omp parallel num_threads(nt)
@@ -339,8 +340,13 @@ int ug_wino_execute(const ug_conv_plan *p, const float *in, float *out)
 
             float *V = ug_malloc((size_t)a2 * vstride * sizeof(float));
             float *M = ug_malloc((size_t)a2 * mstride * sizeof(float));
+            if (!V || !M) {
+#pragma omp atomic write
+                err = 1;
+            }
 #pragma omp for schedule(dynamic, 1)
             for (int it = 0; it < items_per_img; ++it) {
+                if (!V || !M) continue; /* F5 */
                 const int tb = it / kblk, kb = it % kblk;
                 const int t0 = tb * TB, tcount = ug_min(TB, g.T - t0);
                 const int npan = ug_ceil_div(tcount, UG_NR);
@@ -385,5 +391,5 @@ int ug_wino_execute(const ug_conv_plan *p, const float *in, float *out)
         }
     }
     ug_free(X);
-    return 0;
+    return err ? -1 : 0;
 }

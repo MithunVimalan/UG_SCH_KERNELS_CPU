@@ -17,6 +17,12 @@
 extern "C" {
 #endif
 
+/* Shape contract (checked by plan creation, which returns NULL otherwise):
+ *   N, C, H, W, K, R, S, strides in [1, 2^24]; pads in [0, 2^24];
+ *   H + 2*pad_h >= R and W + 2*pad_w >= S (the kernel fits the padded input);
+ *   C*R*S, P*Q and H*W at most 2^31 - 1.  Padding may exceed the kernel size.
+ *   int8 additionally: C*R*S <= UG_Q_MAX_CRS (exact int32 accumulation), and
+ *   Winograd F(2x2) int8 needs C <= 1800. Input and output buffers must not overlap. */
 typedef struct {
     int N, C, H, W;      /* input  */
     int K, R, S;         /* filters */
@@ -35,8 +41,18 @@ typedef enum {
 
 typedef struct ug_conv_plan ug_conv_plan;
 
-static inline int ug_out_h(const ug_conv_desc *d) { return (d->H + 2 * d->pad_h - d->R) / d->stride_h + 1; }
-static inline int ug_out_w(const ug_conv_desc *d) { return (d->W + 2 * d->pad_w - d->S) / d->stride_w + 1; }
+/* Output size; 0 when the kernel does not fit (C division truncates toward zero, so
+ * the naive formula would return 1 for e.g. H=2, R=3, stride 2). */
+static inline int ug_out_h(const ug_conv_desc *d)
+{
+    long long e = (long long)d->H + 2LL * d->pad_h - d->R;
+    return (e < 0 || d->stride_h <= 0) ? 0 : (int)(e / d->stride_h + 1);
+}
+static inline int ug_out_w(const ug_conv_desc *d)
+{
+    long long e = (long long)d->W + 2LL * d->pad_w - d->S;
+    return (e < 0 || d->stride_w <= 0) ? 0 : (int)(e / d->stride_w + 1);
+}
 
 /* Group number (1,2,3) of an algorithm, 0 for AUTO/TUNE. */
 int ug_algo_group(ug_algo a);
@@ -65,6 +81,11 @@ void ug_costmodel_set(const double c[UG_CM_NFEAT]);
 ug_conv_plan *ug_conv_plan_create(const ug_conv_desc *d, const float *weights,
                                   const float *bias, int relu, ug_algo algo, int nthreads);
 ug_algo ug_conv_plan_algo(const ug_conv_plan *p);
+/* Returns 0, or -1 on bad arguments / allocation failure (output then unspecified).
+ * ReLU propagates NaN (relu(NaN) = NaN). A plan may be executed concurrently from
+ * several threads. Note: Winograd mixes the inputs of a whole tile, so a NaN/Inf
+ * input can make every output of its 4x4 (F4) / 2x2 (F2) tile NaN, not only the
+ * outputs whose receptive field contains it (direct and GEMM are exact here). */
 int ug_conv_execute(const ug_conv_plan *p, const float *in, float *out);
 void ug_conv_plan_destroy(ug_conv_plan *p);
 
@@ -91,6 +112,9 @@ typedef enum {
 
 typedef struct ug_qconv_plan ug_qconv_plan;
 
+/* |sum (x - zp) * w| <= 255 * 128 * C*R*S must stay below 2^31 for exact int32 sums. */
+#define UG_Q_MAX_CRS 65793
+
 const char *ug_qalgo_name(ug_qalgo a);
 int ug_qalgo_eligible(const ug_conv_desc *d, ug_qalgo a);
 ug_qalgo ug_qselect_algo(const ug_conv_desc *d, int nthreads);
@@ -111,6 +135,7 @@ ug_qconv_plan *ug_qconv_plan_create(const ug_conv_desc *d, const signed char *w,
 ug_qalgo ug_qconv_plan_algo(const ug_qconv_plan *p);
 int ug_qconv_execute_s32(const ug_qconv_plan *p, const unsigned char *in, int *out);
 int ug_qconv_execute_f32(const ug_qconv_plan *p, const unsigned char *in, float *out);
+/* out_scale > 0, out_zp in [0,255]; returns -1 otherwise. Values beyond the u8 range saturate. */
 int ug_qconv_execute_u8(const ug_qconv_plan *p, const unsigned char *in, unsigned char *out,
                         float out_scale, int out_zp);
 void ug_qconv_plan_destroy(ug_qconv_plan *p);

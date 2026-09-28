@@ -1,0 +1,43 @@
+PASS F1   int8 overflow beyond the bound -- C*R*S=66600 rejected by Q1-direct
+PASS F1   int8 overflow beyond the bound -- C*R*S=66600 rejected by Q2-im2col+gemm
+PASS F1   int8 exactness at the bound -- C*R*S=65790 (bound) Q1-direct centre -2147385600 exact -2147385600
+PASS F1   int8 exactness at the bound -- C*R*S=65790 (bound) Q2-im2col+gemm centre -2147385600 exact -2147385600
+PASS F2   kernel larger than padded input is rejected -- shape 0: H+2p=2 < R=3, ug_out_h()=0, accepted by 0 plan kinds
+PASS F2   kernel larger than padded input is rejected -- shape 1: H+2p=6 < R=7, ug_out_h()=0, accepted by 0 plan kinds
+PASS F3   u8 requantisation saturates -- rc 0, +3.2e9 -> 255 (want 255), -3.2e9 -> 0 (want 0)
+PASS F3   out_zp outside [0,255] rejected -- execute_u8 with out_zp=300 returned -1 (want -1)
+PASS F4   fp32 ReLU propagates NaN in every tile -- G1-direct: 0 receptive-field outputs lost the NaN, 0 extra NaN outputs
+PASS F4   fp32 ReLU propagates NaN in every tile -- G2-im2col+gemm: 0 receptive-field outputs lost the NaN, 0 extra NaN outputs
+PASS F4   fp32 ReLU propagates NaN in every tile -- G3-winograd-F4: 0 receptive-field outputs lost the NaN, 77 extra NaN outputs
+PASS F4   fp32 ReLU propagates NaN in every tile -- G3-winograd-F2: 0 receptive-field outputs lost the NaN, 0 extra NaN outputs
+PASS F4   int8 f32 epilogue ReLU propagates NaN -- Q1-direct: 0 of 735 outputs lost the NaN
+PASS F4   int8 f32 epilogue ReLU propagates NaN -- Q2-im2col+gemm: 0 of 735 outputs lost the NaN
+PASS F4   int8 f32 epilogue ReLU propagates NaN -- Q3-winograd-F2: 0 of 735 outputs lost the NaN
+PASS F8   ug_malloc rejects sizes that wrap when rounded -- ug_malloc(SIZE_MAX-8) = (nil), ug_malloc(SIZE_MAX) = (nil) (want NULL, NULL)
+PASS F9   int-overflowing shape is rejected -- shape 0 accepted: no
+PASS F9   int-overflowing shape is rejected -- shape 1 accepted: no
+PASS F9   int-overflowing shape is rejected -- shape 2 accepted: no
+PASS F9   int-overflowing shape is rejected -- shape 3 accepted: no
+PASS F9   int-overflowing shape is rejected -- shape 4 accepted: no
+PASS F9   int-overflowing shape is rejected -- shape 5 accepted: no
+PASS F12  padding >= kernel size works -- shape 0 (pad 3,3 vs kernel 3x3): 11 plans, all accepted and correct
+PASS F12  padding >= kernel size works -- shape 1 (pad 4,2 vs kernel 3x3): 11 plans, all accepted and correct
+PASS F12  padding >= kernel size works -- shape 2 (pad 6,5 vs kernel 5x5): 6 plans, all accepted and correct
+PASS F12  padding >= kernel size works -- shape 3 (pad 2,2 vs kernel 1x1): 6 plans, all accepted and correct
+PASS F5   allocation failure is reported, never a crash -- G1-direct: 6 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- G2-im2col+gemm: 6 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- G3-winograd-F4: 13 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- G3-winograd-F2: 13 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- tune: 109 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- Q1-direct: 8 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- Q2-im2col+gemm: 8 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- Q3-winograd-F2: 15 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F5   allocation failure is reported, never a crash -- q-tune: 70 allocations failed one at a time; 0 crashed/hung, 0 returned success with wrong output (first at alloc #-1); fault-free run ok
+PASS F11  TUNE never picks a failing algorithm -- working algorithms under a 409600-byte allocation cap: direct 0 gemm 1 F4 0 F2 0; TUNE picked G2-im2col+gemm, execute rc 0
+PASS B1   every argument-validation branch -- 0 validation branches misbehaved
+PASS B2   cost-model file accepted only if every value is finite and >= 0 -- file case 0: fp32 constant[1] = 7, int8 constant[1] = 7 (loaded expected)
+PASS B2   cost-model file accepted only if every value is finite and >= 0 -- file case 1: fp32 constant[1] = 12.3, int8 constant[1] = 0.01608 (defaults expected)
+PASS B2   cost-model file accepted only if every value is finite and >= 0 -- file case 2: fp32 constant[1] = 12.3, int8 constant[1] = 0.01608 (defaults expected)
+PASS B2   cost-model file accepted only if every value is finite and >= 0 -- file case 3: fp32 constant[1] = 12.3, int8 constant[1] = 0.01608 (defaults expected)
+PASS B2   cost-model file accepted only if every value is finite and >= 0 -- file case 4: fp32 constant[1] = 12.3, int8 constant[1] = 0.01608 (defaults expected)
+42/42 regression checks passed

@@ -1,0 +1,48 @@
+im2col_gemm.c:41:    const int pointwise = (R == 1 && S == 1 && sh == 1 && sw == 1 && ph == 0 && pw == 0);
+plan.c:35:    if (ci.is_arrow_lake_s) {
+plan.c:43:    if (ci.l3_bytes > 0) g_host.l3_bytes = (double)ci.l3_bytes;  /* D0: measured beats spec */
+plan.c:44:    g_isa_ok = ci.avx2 && ci.fma;  /* ug_cpu_detect also checks the OS saves YMM state */
+plan.c:143:    if ((long long)d->C * d->R * d->S > INT_MAX) return 0;
+plan.c:144:    if (P * Q > INT_MAX || (long long)d->H * d->W > INT_MAX) return 0;
+plan.c:157:        return d->R == 3 && d->S == 3 && d->stride_h == 1 && d->stride_w == 1;
+plan.c:167:    if (nthreads <= 0) nthreads = mc->p_cores + mc->e_cores;
+plan.c:174:    switch (a) {
+plan.c:189:        int pointwise = R == 1 && S == 1 && d->stride_h == 1 && d->stride_w == 1 && d->pad_h == 0 && d->pad_w
+plan.c:263:    if (!p) return NULL;
+plan.c:275:    switch (algo) {
+plan.c:291:    if (!g_isa_ok) return NULL; /* kernels are AVX2+FMA */
+plan.c:333:    switch (p->algo) {
+q_plan.c:131:    int ok = ci.avx2 && ci.fma;
+q_plan.c:137:    ok = ok && ci.avx512f && ((c >> 11) & 1) && ((b >> 31) & 1); /* AVX512_VNNI, AVX512VL */
+q_plan.c:154:    if (!p) return NULL;
+q_plan.c:179:    switch (algo) {
+q_plan.c:192:    switch (p->algo) {
+q_plan.c:205:    if (!g_qisa_ok || !w || !w_scale || in_zp < 0 || in_zp > 255) return NULL;
+q_plan.c:241:ug_qalgo ug_qconv_plan_algo(const ug_qconv_plan *p) { return p ? p->algo : UG_QALGO_AUTO; }
+q_plan.c:245:    if (!p || !in || !out) return -1;
+q_plan.c:252:    if (!p || !in || !out) return -1;
+q_plan.c:260:    if (!p || !in || !out || !(out_scale > 0) || out_zp < 0 || out_zp > 255) return -1; /* F3 */
+q_plan.c:294:    switch (a) {
+cpu.c:13:    if (!f) return 0;
+cpu.c:15:    if (fgets(buf, sizeof buf, f)) {
+cpu.c:18:        if (*end == 'K') v *= 1024;
+cpu.c:19:        else if (*end == 'M') v *= 1024 * 1024;
+cpu.c:38:    if (max_leaf < 1) return;
+cpu.c:43:    if (fam == 6 || fam == 15) model |= ((a >> 16) & 0xF) << 4;
+cpu.c:44:    if (fam == 15) fam += (a >> 20) & 0xFF;
+cpu.c:49:    const int os_ymm = ((c >> 27) & 1) && (xgetbv0() & 0x6) == 0x6;
+cpu.c:50:    const int os_zmm = os_ymm && (xgetbv0() & 0xE6) == 0xE6;
+cpu.c:51:    info->fma = os_ymm && ((c >> 12) & 1);
+cpu.c:52:    info->f16c = os_ymm && ((c >> 29) & 1);
+cpu.c:54:    if (max_leaf >= 7) {
+cpu.c:57:        info->avx2 = os_ymm && ((b >> 5) & 1);
+cpu.c:58:        info->avx512f = os_zmm && ((b >> 16) & 1);
+cpu.c:60:        if (max_sub7 >= 1) {
+cpu.c:62:            info->avx_vnni = os_ymm && ((a >> 4) & 1);          /* CPUID.07H.01H:EAX[4]  */
+cpu.c:63:            info->avx_vnni_int8 = os_ymm && ((d >> 4) & 1);     /* CPUID.07H.01H:EDX[4]  */
+cpu.c:64:            info->avx_ne_convert = os_ymm && ((d >> 5) & 1);    /* CPUID.07H.01H:EDX[5]  */
+cpu.c:67:    if (max_ext >= 0x80000004u) {
+cpu.c:75:    info->is_arrow_lake_s = (info->family == 6 && info->model == 0xC6);
+cpu.c:84:    if (__get_cpuid_max(0, NULL) < 0x1A) return '?';
+cpu.c:86:    if (!((d >> 15) & 1)) return '?';
+cpu.c:88:    switch (a >> 24) {

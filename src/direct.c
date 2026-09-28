@@ -140,7 +140,7 @@ int ug_direct_execute(const ug_conv_plan *p, const float *in, float *out)
                                 __m256 b = _mm256_broadcast_ss(bias + i);
                                 __m256 v0 = _mm256_add_ps(acc[2 * i], b);
                                 __m256 v1 = _mm256_add_ps(acc[2 * i + 1], b);
-                                if (p->relu) { v0 = _mm256_max_ps(v0, zero); v1 = _mm256_max_ps(v1, zero); }
+                                if (p->relu) { v0 = _mm256_max_ps(zero, v0); v1 = _mm256_max_ps(zero, v1); } /* keeps NaN */
                                 float *dst = y + (size_t)(ip * UG_MR + i) * PQ + (size_t)oh * Q + ow0;
                                 if (nv == 16) {
                                     _mm256_storeu_ps(dst, v0);

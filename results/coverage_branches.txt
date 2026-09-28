@@ -1,0 +1,10 @@
+src/cpu.c' lines 76.27% of 59 branches-reached 67.61% of 71 taken 35.21% of 71 
+src/plan.c' lines 98.10% of 211 branches-reached 100.00% of 195 taken 92.82% of 195 
+src/kernel_6x16.c' lines 100.00% of 68 branches-reached 100.00% of 32 taken 100.00% of 32 
+src/direct.c' lines 100.00% of 69 branches-reached 100.00% of 32 taken 100.00% of 32 
+src/im2col_gemm.c' lines 100.00% of 93 branches-reached 100.00% of 94 taken 98.94% of 94 
+src/winograd.c' lines 100.00% of 190 branches-reached 100.00% of 166 taken 100.00% of 166 
+src/q_plan.c' lines 98.71% of 232 branches-reached 100.00% of 211 taken 91.94% of 211 
+src/q_gemm.c' lines 100.00% of 116 branches-reached 100.00% of 84 taken 100.00% of 84 
+src/q_direct.c' lines 100.00% of 72 branches-reached 100.00% of 36 taken 100.00% of 36 
+src/q_winograd.c' lines 100.00% of 137 branches-reached 100.00% of 96 taken 100.00% of 96 
