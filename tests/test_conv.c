@@ -62,9 +62,11 @@ int main(void)
         {2, 17, 16, 16, 30, 1, 1, 2, 2, 0, 0},
         {1, 300, 5, 6, 7, 1, 1, 1, 1, 0, 0},       /* CRS > KC                          */
         {1, 64, 18, 18, 64, 3, 3, 1, 1, 1, 1},
+        {1, 4, 70, 70, 12, 3, 3, 2, 2, 1, 1},      /* stride-2 vector im2col path (row >= 32) */
+        {1, 5, 40, 67, 9, 1, 1, 2, 2, 0, 0},       /* 1x1 stride 2, wide rows */
     };
-    const ug_algo algos[] = {UG_ALGO_DIRECT, UG_ALGO_IM2COL_GEMM, UG_ALGO_WINOGRAD_F4, UG_ALGO_WINOGRAD_F2, UG_ALGO_AUTO};
-    const double tol[] = {1e-5, 1e-5, 2e-4, 3e-5, 2e-4};
+    const ug_algo algos[] = {UG_ALGO_DIRECT, UG_ALGO_IM2COL_GEMM, UG_ALGO_WINOGRAD_F4, UG_ALGO_WINOGRAD_F2, UG_ALGO_AUTO, UG_ALGO_TUNE};
+    const double tol[] = {1e-5, 1e-5, 2e-4, 3e-5, 2e-4, 2e-4};
     int fails = 0, runs = 0;
 
     for (unsigned si = 0; si < sizeof shapes / sizeof shapes[0]; ++si) {
@@ -80,7 +82,7 @@ int main(void)
         for (int relu = 0; relu < 2; ++relu) {
             reference(d, x, w, relu ? b : NULL, relu, yr, mag);
             for (unsigned ai = 0; ai < sizeof algos / sizeof algos[0]; ++ai) {
-                if (algos[ai] != UG_ALGO_AUTO && !ug_algo_eligible(d, algos[ai])) continue;
+                if (algos[ai] != UG_ALGO_AUTO && algos[ai] != UG_ALGO_TUNE && !ug_algo_eligible(d, algos[ai])) continue;
                 for (int nt = 1; nt <= 3; nt += 2) {
                     ug_conv_plan *p = ug_conv_plan_create(d, w, relu ? b : NULL, relu, algos[ai], nt);
                     if (!p) { printf("FAIL plan_create shape %u algo %s\n", si, ug_algo_name(algos[ai])); ++fails; continue; }
@@ -101,6 +103,30 @@ int main(void)
             }
         }
         free(x); free(w); free(b); free(y); free(yr); free(mag);
+    }
+    /* API checks: names/groups, cost-model get/set and file loading, invalid input */
+    {
+        int bad = 0;
+        const ug_algo all[] = {UG_ALGO_AUTO, UG_ALGO_DIRECT, UG_ALGO_IM2COL_GEMM, UG_ALGO_WINOGRAD_F4, UG_ALGO_WINOGRAD_F2, UG_ALGO_TUNE};
+        const int grp[] = {0, 1, 2, 3, 3, 0};
+        for (int i = 0; i < 6; ++i) bad += ug_algo_group(all[i]) != grp[i] || ug_algo_name(all[i])[0] == '?';
+        bad += ug_algo_name((ug_algo)99)[0] != '?' || ug_algo_group((ug_algo)99) != 0;
+        double c[UG_CM_NFEAT], c2[UG_CM_NFEAT];
+        ug_costmodel_get(c);
+        for (int i = 0; i < UG_CM_NFEAT; ++i) c2[i] = c[i] * 2;
+        ug_costmodel_set(c2);
+        ug_conv_desc dd = shapes[16];
+        double t2 = ug_algo_cost(&dd, UG_ALGO_IM2COL_GEMM, 1);
+        ug_costmodel_set(c);
+        double t1 = ug_algo_cost(&dd, UG_ALGO_IM2COL_GEMM, 1);
+        bad += !(t2 > t1 * 1.5);                         /* doubling every constant ~doubles compute time */
+        ug_conv_desc inval = {1, 3, 2, 2, 4, 5, 5, 1, 1, 0, 0}; /* kernel larger than input */
+        float wtmp[300] = {0};
+        bad += ug_conv_plan_create(&inval, wtmp, NULL, 0, UG_ALGO_AUTO, 1) != NULL;
+        bad += ug_algo_cost(&inval, UG_ALGO_DIRECT, 1) >= 0;
+        bad += ug_algo_cost(&shapes[9], UG_ALGO_WINOGRAD_F4, 1) >= 0; /* 5x5 not Winograd-eligible */
+        ++runs;
+        if (bad) { ++fails; printf("FAIL api checks (%d)\n", bad); } else printf("ok   api checks\n");
     }
     printf("%d/%d passed\n", runs - fails, runs);
     return fails ? 1 : 0;

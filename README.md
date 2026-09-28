@@ -13,15 +13,24 @@ calibrated selector:
 `UG_ALGO_AUTO` picks with a cost model that prices the exact schedule each group
 will run; `UG_ALGO_TUNE` times every eligible algorithm once and keeps the fastest.
 
-ISA: AVX2 + FMA only (Arrow Lake has no AVX-512). Layouts: NCHW in, KCRS weights,
+ISA: fp32 kernels use AVX2 + FMA only (Arrow Lake has no AVX-512); int8 kernels use AVX-VNNI. Layouts: NCHW in, KCRS weights,
 NKPQ out; bias + ReLU fused.
+
+### INT8 (AVX-VNNI)
+
+Same three groups in int8 (`ug_qconv_*`, see [docs/INT8.md](docs/INT8.md)): Q1 direct and
+Q2 im2col+GEMM on `vpdpbusd` (u8 x s8), Q3 an exact integer Winograd F(2x2) on
+`vpdpwssd`. All three are bit-exact to a scalar integer reference.
 
 ## Build and test
 
 ```sh
 make                    # portable AVX2 build (x86-64-v3)
 make ARCH=arrowlake     # target build, -march=arrowlake-s (clang >= 18 / gcc >= 14)
-make test               # 276 correctness runs vs an fp64 reference
+make test               # fp32 (377 runs vs fp64) + int8 (3705 bit-exact runs)
+make sanitize           # both suites under ASan + UBSan
+python3 tools/mutation_test.py   # 13 injected bugs, all must be caught
+./build/bench_conv -int8 [-e2e]  # int8 vs fp32 vs OpenBLAS
 ./build/bench_conv -t <threads> [-n vgg16|resnet50] [-e2e] [-naive] [-csv file]
 ./build/calibrate -o costmodel.txt && export UGCONV_COSTMODEL=$PWD/costmodel.txt
 ```

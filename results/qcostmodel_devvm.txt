@@ -1,0 +1,10 @@
+0.016092082  # direct u8 MAC
+0.016080145  # gemm u8 MAC
+0.077228206  # winograd s16 MAC
+29.434535  # 6x16 tile
+0.89318644  # output element
+6.6118847  # im2col byte (scalar)
+2.2870888  # direct repack byte
+11.655989  # F2 input tile*ch
+0  # F2 output tile*ch
+0.71118476  # im2col byte (vector)

@@ -248,7 +248,7 @@ End-to-end conv stack, cold weights, min of 3 runs:
 (first block 1 thread, second block 4 threads; this run predates the final
 re-run above by a few minutes, same code except the ISA check.)
 
-### Accuracy (tests/test_conv.c, 276 runs, all pass)
+### Accuracy (tests/test_conv.c, 377 runs incl. TUNE and API checks, all pass)
 Error per output normalised by Σ|w·x| + |bias| against an fp64 reference, over 17
 shapes that hit every tail path (K not a multiple of 6, widths not multiples of
 8/16, straddling tile groups, strides 1-3, pads 0-3, 1x1/3x3/5x5/7x7, N=2, 1 and 3
@@ -278,7 +278,7 @@ F4 loses about 3 bits against direct (≈10x the error); F2 does not.
 
 ```sh
 make ARCH=arrowlake            # clang >= 18 or gcc >= 14 (-march=arrowlake-s)
-./build/test_conv              # correctness, must print 276/276 passed
+./build/test_conv              # correctness, must print 377/377 passed
 ./build/calibrate -o costmodel.txt
 export UGCONV_COSTMODEL=$PWD/costmodel.txt
 export OMP_WAIT_POLICY=PASSIVE OMP_PROC_BIND=close OMP_PLACES=cores

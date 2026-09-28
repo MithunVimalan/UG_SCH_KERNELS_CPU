@@ -1,0 +1,16 @@
+CPU: Intel(R) Xeon(R) Processor @ 2.80GHz | family 6 model 0x55 | AVX2 1 FMA 1 AVX-VNNI 0 VNNI-INT8 0 AVX512F 1 hybrid 0 | Arrow Lake-S: NO (numbers below are not target numbers)
+L1d 32 KB  L2 1024 KB  L3 33792 KB | threads 1 | fp32 kernels: AVX2+FMA | int8 kernels: AVX512-VNNI (EVEX, ymm) [dev-VM stand-in for AVX-VNNI]
+
+End-to-end conv stack, cold weights, min of 3 runs:
+  vgg16     | auto 247.31 ms | G1 only 471.68 ms | G2 only 433.65 ms | G3-F4 else G2 233.51 ms | G3-F2 else G2 274.61 ms | OpenBLAS 514.96 ms | auto vs OpenBLAS 2.08x, vs best single group 0.94x
+  vgg16     | INT8 auto 130.93 ms | vs fp32 auto 1.89x | vs OpenBLAS fp32 3.93x
+  resnet50  | auto 112.81 ms | G1 only 168.09 ms | G2 only 136.18 ms | G3-F4 else G2 124.70 ms | G3-F2 else G2 123.93 ms | OpenBLAS 144.05 ms | auto vs OpenBLAS 1.28x, vs best single group 1.10x
+  resnet50  | INT8 auto 47.95 ms | vs fp32 auto 2.35x | vs OpenBLAS fp32 3.00x
+CPU: Intel(R) Xeon(R) Processor @ 2.80GHz | family 6 model 0x55 | AVX2 1 FMA 1 AVX-VNNI 0 VNNI-INT8 0 AVX512F 1 hybrid 0 | Arrow Lake-S: NO (numbers below are not target numbers)
+L1d 32 KB  L2 1024 KB  L3 33792 KB | threads 4 | fp32 kernels: AVX2+FMA | int8 kernels: AVX512-VNNI (EVEX, ymm) [dev-VM stand-in for AVX-VNNI]
+
+End-to-end conv stack, cold weights, min of 3 runs:
+  vgg16     | auto 61.06 ms | G1 only 139.04 ms | G2 only 140.82 ms | G3-F4 else G2 68.84 ms | G3-F2 else G2 74.13 ms | OpenBLAS 226.29 ms | auto vs OpenBLAS 3.71x, vs best single group 1.13x
+  vgg16     | INT8 auto 45.54 ms | vs fp32 auto 1.34x | vs OpenBLAS fp32 4.97x
+  resnet50  | auto 48.25 ms | G1 only 61.92 ms | G2 only 56.58 ms | G3-F4 else G2 54.16 ms | G3-F2 else G2 47.76 ms | OpenBLAS 76.66 ms | auto vs OpenBLAS 1.59x, vs best single group 0.99x
+  resnet50  | INT8 auto 29.89 ms | vs fp32 auto 1.61x | vs OpenBLAS fp32 2.56x

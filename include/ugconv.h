@@ -68,6 +68,58 @@ ug_algo ug_conv_plan_algo(const ug_conv_plan *p);
 int ug_conv_execute(const ug_conv_plan *p, const float *in, float *out);
 void ug_conv_plan_destroy(ug_conv_plan *p);
 
+/* ------------------------------------------------------------------------------
+ * INT8 convolution (AVX-VNNI).
+ *
+ * Quantisation: activations u8 asymmetric  x = in_scale * (q - in_zp),
+ *               weights    s8 symmetric per output channel  w = w_scale[k] * q.
+ * Accumulation is exact int32:  acc[k,p] = sum (qx - in_zp) * qw  (no rounding at all).
+ * Epilogues: s32 (acc itself, for verification), f32 (acc*in_scale*w_scale[k] + bias,
+ * ReLU), u8 (the f32 value requantised: clamp(nearbyint(y / out_scale) + out_zp)).
+ *
+ *   Group 1  UG_QALGO_DIRECT       direct, input interleaved 4 channels per pixel (u8 x s8)
+ *   Group 2  UG_QALGO_IM2COL_GEMM  im2col fused into 4-byte-interleaved GEMM panels (u8 x s8)
+ *   Group 3  UG_QALGO_WINOGRAD_F2  exact integer Winograd F(2x2,3x3), int16 x int16 VNNI
+ * ------------------------------------------------------------------------------ */
+typedef enum {
+    UG_QALGO_AUTO = 0,
+    UG_QALGO_DIRECT = 1,
+    UG_QALGO_IM2COL_GEMM = 2,
+    UG_QALGO_WINOGRAD_F2 = 3,
+    UG_QALGO_TUNE = 4
+} ug_qalgo;
+
+typedef struct ug_qconv_plan ug_qconv_plan;
+
+const char *ug_qalgo_name(ug_qalgo a);
+int ug_qalgo_eligible(const ug_conv_desc *d, ug_qalgo a);
+ug_qalgo ug_qselect_algo(const ug_conv_desc *d, int nthreads);
+double ug_qalgo_cost(const ug_conv_desc *d, ug_qalgo a, int nthreads);
+const char *ug_qvnni_backend(void);
+
+/* INT8 cost-model calibration (tools/calibrate.c -int8); env UGCONV_QCOSTMODEL=<file>. */
+#define UG_QCM_NFEAT 10
+extern const char *const ug_qcm_feature_names[UG_QCM_NFEAT];
+int ug_qcostmodel_features(const ug_conv_desc *d, ug_qalgo a, double f[UG_QCM_NFEAT]);
+void ug_qcostmodel_get(double c[UG_QCM_NFEAT]);
+void ug_qcostmodel_set(const double c[UG_QCM_NFEAT]);
+
+/* w: K*C*R*S int8 (KCRS). w_scale: K floats. bias: K floats or NULL. in_zp in [0,255]. */
+ug_qconv_plan *ug_qconv_plan_create(const ug_conv_desc *d, const signed char *w, const float *w_scale,
+                                    const float *bias, int relu, float in_scale, int in_zp,
+                                    ug_qalgo algo, int nthreads);
+ug_qalgo ug_qconv_plan_algo(const ug_qconv_plan *p);
+int ug_qconv_execute_s32(const ug_qconv_plan *p, const unsigned char *in, int *out);
+int ug_qconv_execute_f32(const ug_qconv_plan *p, const unsigned char *in, float *out);
+int ug_qconv_execute_u8(const ug_qconv_plan *p, const unsigned char *in, unsigned char *out,
+                        float out_scale, int out_zp);
+void ug_qconv_plan_destroy(ug_qconv_plan *p);
+
+/* Helpers: symmetric per-output-channel weight quantisation (scale = max|w| / 127),
+ * and u8 activation quantisation q = clamp(nearbyint(x / scale) + zp, 0, 255). */
+void ug_quantize_weights_s8(const float *w, int K, int CRS, signed char *q, float *scale);
+void ug_quantize_u8(const float *x, long n, float scale, int zp, unsigned char *q);
+
 /* CPU facts detected at runtime (CPUID). */
 typedef struct {
     char brand[49];

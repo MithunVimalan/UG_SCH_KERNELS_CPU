@@ -1,0 +1,42 @@
+CPU: Intel(R) Xeon(R) Processor @ 2.80GHz | family 6 model 0x55 | AVX2 1 FMA 1 AVX-VNNI 0 VNNI-INT8 0 AVX512F 1 hybrid 0 | Arrow Lake-S: NO (numbers below are not target numbers)
+L1d 32 KB  L2 1024 KB  L3 33792 KB | threads 1 | fp32 kernels: AVX2+FMA | int8 kernels: AVX512-VNNI (EVEX, ymm) [dev-VM stand-in for AVX-VNNI]
+
+INT8 VNNI backend: AVX512-VNNI (EVEX, ymm) [dev-VM stand-in for AVX-VNNI]
+activations: fp32 in [-0.5,0.5) -> u8 (scale 1/255, zp 128); weights: per-channel symmetric s8
+err = max|y_int8 - y_fp32| / max|y_fp32| against the fp32 convolution of the unquantised data
+
+net       layer            x    Q1 ms    Q2 ms    Q3 ms    qauto |  f32auto    OBLAS | int8 pick        vsF32   vsOB      err
+vgg16     conv1_1          1    1.849    2.678    5.041    1.849 |    2.367    6.093 | Q1-direct        1.28x  3.30x 5.07e-03
+vgg16     conv1_2          1   15.524   27.081   17.671   15.524 |   24.655   95.763 | Q1-direct        1.59x  6.17x 5.50e-03
+vgg16     conv2_1          1    6.959   10.824    8.904    6.959 |   11.263   35.456 | Q1-direct        1.62x  5.09x 5.30e-03
+vgg16     conv2_2          1   12.931   20.407   17.000   12.931 |   19.893   66.672 | Q1-direct        1.54x  5.16x 4.99e-03
+vgg16     conv3_1          1    6.702    8.645    9.142    6.702 |    9.470   27.174 | Q1-direct        1.41x  4.05x 5.78e-03
+vgg16     conv3_2          2   13.838   17.507   18.114   13.838 |   18.830   54.312 | Q1-direct        1.36x  3.92x 5.07e-03
+vgg16     conv4_1          1    6.597    8.064   10.994    6.597 |   17.728   23.986 | Q1-direct        2.69x  3.64x 5.82e-03
+vgg16     conv4_2          2   13.637   15.857   27.888   13.637 |   37.753   47.840 | Q1-direct        2.77x  3.51x 5.72e-03
+vgg16     conv5_x          3    3.148    5.120    7.334    3.148 |    8.905   13.031 | Q1-direct        2.83x  4.14x 5.28e-03
+resnet50  stem7x7s2        1    1.232    2.223        -    1.232 |    2.710    6.234 | Q1-direct        2.20x  5.06x 5.68e-03
+resnet50  l1_1x1_64        3    0.337    0.166        -    0.166 |    0.345    0.338 | Q2-im2col+gemm   2.08x  2.03x 4.12e-03
+resnet50  l1_3x3           3    1.007    2.285    1.201    1.007 |    1.097    5.484 | Q1-direct        1.09x  5.45x 6.55e-03
+resnet50  l1_1x1_up        4    0.841    0.599        -    0.599 |    1.187    1.374 | Q2-im2col+gemm   1.98x  2.29x 5.39e-03
+resnet50  l2_1x1_red_s1    1    1.751    0.834        -    0.834 |    2.861    2.491 | Q2-im2col+gemm   3.43x  2.99x 5.14e-03
+resnet50  l2_3x3_s2        1    1.210    2.013        -    1.210 |    3.970    4.086 | Q1-direct        3.28x  3.38x 5.57e-03
+resnet50  l2_1x1_up        4    0.630    0.429        -    0.429 |    1.133    1.202 | Q2-im2col+gemm   2.64x  2.80x 4.53e-03
+resnet50  l2_ds_1x1_s2     1    1.952    0.957        -    0.957 |    2.685    2.653 | Q2-im2col+gemm   2.81x  2.77x 5.00e-03
+resnet50  l2_1x1_red       3    0.803    0.364        -    0.364 |    1.232    1.194 | Q2-im2col+gemm   3.38x  3.28x 5.44e-03
+resnet50  l2_3x3           3    0.866    1.971    1.524    0.866 |    1.124    3.972 | Q1-direct        1.30x  4.59x 5.61e-03
+resnet50  l3_1x1_red_s1    1    1.233    0.669        -    0.669 |    2.394    2.283 | Q2-im2col+gemm   3.58x  3.41x 5.27e-03
+resnet50  l3_3x3_s2        1    0.946    1.871        -    0.946 |    3.473    3.491 | Q1-direct        3.67x  3.69x 5.99e-03
+resnet50  l3_1x1_up        6    0.485    0.356        -    0.356 |    1.126    1.167 | Q2-im2col+gemm   3.16x  3.27x 6.10e-03
+resnet50  l3_ds_1x1_s2     1    1.263    0.889        -    0.889 |    2.656    2.509 | Q2-im2col+gemm   2.99x  2.82x 5.23e-03
+resnet50  l3_1x1_red       5    0.569    0.333        -    0.333 |    1.188    1.174 | Q2-im2col+gemm   3.57x  3.53x 4.29e-03
+resnet50  l3_3x3           5    0.758    1.859    1.694    0.758 |    1.314    3.415 | Q1-direct        1.73x  4.50x 5.08e-03
+resnet50  l4_1x1_red_s1    1    0.923    0.639        -    0.639 |    2.363    2.311 | Q2-im2col+gemm   3.70x  3.61x 5.20e-03
+resnet50  l4_3x3_s2        1    1.582    1.339        -    1.339 |    4.254    3.816 | Q2-im2col+gemm   3.18x  2.85x 5.05e-03
+resnet50  l4_1x1_up        3    0.756    0.384        -    0.384 |    1.349    1.375 | Q2-im2col+gemm   3.52x  3.58x 5.46e-03
+resnet50  l4_ds_1x1_s2     1    1.861    0.833        -    0.833 |    3.483    3.126 | Q2-im2col+gemm   4.18x  3.75x 6.30e-03
+resnet50  l4_1x1_red       2    0.855    0.384        -    0.384 |    1.387    1.413 | Q2-im2col+gemm   3.61x  3.68x 5.16e-03
+resnet50  l4_3x3           2    1.454    1.341    1.668    1.341 |    2.511    3.819 | Q2-im2col+gemm   1.87x  2.85x 4.63e-03
+
+Totals (19.36 GMAC): int8 auto 148.02 ms | int8 best-per-layer 148.02 ms | fp32 auto 307.90 ms | OpenBLAS fp32 619.34 ms
+  int8 auto vs fp32 auto 2.08x, vs OpenBLAS fp32 4.18x; int8 selector picked the fastest on 31/31 layers; 261.5 effective GOP/s

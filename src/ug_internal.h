@@ -7,7 +7,9 @@
 #if !defined(__AVX2__) || !defined(__FMA__)
 #error "ugconv needs -mavx2 -mfma (use -march=arrowlake-s on the target)"
 #endif
-#if defined(__AVX512F__)
+/* Only the int8 files of the dev-VM build may see AVX-512 (they use EVEX VNNI on
+ * ymm as a stand-in for AVX-VNNI); they define UG_DEV_EVEX_VNNI. */
+#if defined(__AVX512F__) && !defined(UG_DEV_EVEX_VNNI)
 #error "ugconv targets Arrow Lake: build without AVX-512 (e.g. -march=x86-64-v3 or -march=arrowlake-s)"
 #endif
 

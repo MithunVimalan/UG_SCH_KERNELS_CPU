@@ -1,0 +1,14 @@
+CAUGHT  Winograd output scale            (src/q_winograd.c) -> 2917/3705 passed
+CAUGHT  B^T row 3                        (src/q_winograd.c) -> 2945/3705 passed
+CAUGHT  fast-path deinterleave           (src/q_winograd.c) -> 3509/3705 passed
+CAUGHT  A^T row 1                        (src/q_winograd.c) -> 3035/3705 passed
+CAUGHT  im2col byte transpose            (src/q_gemm.c) -> 2155/3705 passed
+CAUGHT  stride-2 even bytes              (src/q_gemm.c) -> 3577/3705 passed
+CAUGHT  half-kernel threshold            (src/q_gemm.c) -> 3577/3705 passed
+CAUGHT  direct tap offset (only S>6)     (src/q_direct.c) -> 3593/3705 passed
+CAUGHT  zero-point correction            (src/q_plan.c) -> 1295/3705 passed
+CAUGHT  u8 clamp at 0                    (src/q_plan.c) -> 1929/3705 passed
+CAUGHT  fp32 F4 input transpose          (src/winograd.c) -> 359/377 passed
+CAUGHT  fp32 stride-2 pack               (src/im2col_gemm.c) -> 359/377 passed
+CAUGHT  fp32 half-kernel threshold       (src/kernel_6x16.c) -> 368/377 passed
+13/13 mutants caught
