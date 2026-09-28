@@ -1,0 +1,6 @@
+End-to-end conv stack, cold weights, min of 3 runs:
+  vgg16     | auto 212.99 ms | G1 only 505.82 ms | G2 only 420.26 ms | G3-F4 else G2 221.87 ms | G3-F2 else G2 258.34 ms | OpenBLAS 500.36 ms | auto vs OpenBLAS 2.35x, vs best single group 1.04x
+  resnet50  | auto 110.86 ms | G1 only 168.77 ms | G2 only 142.76 ms | G3-F4 else G2 131.01 ms | G3-F2 else G2 114.39 ms | OpenBLAS 145.20 ms | auto vs OpenBLAS 1.31x, vs best single group 1.03x
+End-to-end conv stack, cold weights, min of 3 runs:
+  vgg16     | auto 66.08 ms | G1 only 132.99 ms | G2 only 122.76 ms | G3-F4 else G2 68.38 ms | G3-F2 else G2 71.12 ms | OpenBLAS 205.73 ms | auto vs OpenBLAS 3.11x, vs best single group 1.03x
+  resnet50  | auto 46.96 ms | G1 only 60.06 ms | G2 only 57.67 ms | G3-F4 else G2 50.69 ms | G3-F2 else G2 44.93 ms | OpenBLAS 77.15 ms | auto vs OpenBLAS 1.64x, vs best single group 0.96x

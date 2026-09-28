@@ -1,0 +1,40 @@
+CPU: Intel(R) Xeon(R) Processor @ 2.80GHz | family 6 model 0x55 | AVX2 1 FMA 1 AVX-VNNI 0 VNNI-INT8 0 AVX512F 1 hybrid 0 | Arrow Lake-S: NO (numbers below are not target numbers)
+L1d 32 KB  L2 1024 KB  L3 33792 KB | threads 4 | kernels built for AVX2+FMA only
+
+net       layer            x      GMAC     G1 ms     G2 ms   G3F4 ms   G3F2 ms  OBLAS ms | auto            measured best   auto/best
+vgg16     conv1_1          1     0.087     0.761     1.232     2.103     1.668     3.001 | G1-direct       G1-direct         1.00
+vgg16     conv1_2          1     1.850    14.112    13.522     6.518     8.288    27.620 | G3-winograd-F4  G3-winograd-F4    1.00
+vgg16     conv2_1          1     0.925     6.616     6.876     2.568     3.445    11.331 | G3-winograd-F4  G3-winograd-F4    1.00
+vgg16     conv2_2          1     1.850    13.809    13.021     5.163     6.836    28.876 | G3-winograd-F4  G3-winograd-F4    1.00
+vgg16     conv3_1          1     0.925     7.728     6.900     2.557     3.218     8.082 | G3-winograd-F4  G3-winograd-F4    1.00
+vgg16     conv3_2          2     1.850    15.218    13.430     4.684     6.658    18.182 | G3-winograd-F4  G3-winograd-F4    1.00
+vgg16     conv4_1          1     0.925     7.996     7.514     3.402     3.632     9.610 | G3-winograd-F4  G3-winograd-F4    1.00
+vgg16     conv4_2          2     1.850    14.928    14.845     7.716     7.753    16.709 | G3-winograd-F2  G3-winograd-F4    1.00
+vgg16     conv5_x          3     0.462     3.498     4.688     2.972     2.458     5.409 | G3-winograd-F2  G3-winograd-F2    1.00
+resnet50  stem7x7s2        1     0.118     0.906     0.930         -         -     2.904 | G1-direct       G1-direct         1.00
+resnet50  l1_1x1_64        3     0.013     0.334     0.182         -         -     0.194 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l1_3x3           3     0.116     1.014     1.048     0.489     0.557     2.411 | G3-winograd-F4  G3-winograd-F4    1.00
+resnet50  l1_1x1_up        4     0.051     0.661     0.482         -         -     0.462 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l2_1x1_red_s1    1     0.103     1.468     0.755         -         -     0.811 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l2_3x3_s2        1     0.116     1.407     1.294         -         -     1.354 | G1-direct       G2-im2col+gemm    1.09
+resnet50  l2_1x1_up        4     0.051     0.629     0.403         -         -     0.589 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l2_ds_1x1_s2     1     0.103     1.283     0.829         -         -     0.951 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l2_1x1_red       3     0.051     0.824     0.473         -         -     0.348 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l2_3x3           3     0.116     1.031     1.237     0.598     0.660     2.260 | G3-winograd-F4  G3-winograd-F4    1.00
+resnet50  l3_1x1_red_s1    1     0.103     1.119     0.744         -         -     0.757 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l3_3x3_s2        1     0.116     1.284     1.575         -         -     1.402 | G1-direct       G1-direct         1.00
+resnet50  l3_1x1_up        6     0.051     0.550     0.430         -         -     0.543 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l3_ds_1x1_s2     1     0.103     1.294     0.959         -         -     1.140 | G1-direct       G2-im2col+gemm    1.35
+resnet50  l3_1x1_red       5     0.051     0.680     0.475         -         -     0.519 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l3_3x3           5     0.116     0.901     1.531     0.673     0.740     1.335 | G3-winograd-F4  G3-winograd-F4    1.00
+resnet50  l4_1x1_red_s1    1     0.103     1.131     0.796         -         -     1.009 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l4_3x3_s2        1     0.116     2.239     1.887         -         -     2.281 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l4_1x1_up        3     0.051     0.772     0.472         -         -     0.663 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l4_ds_1x1_s2     1     0.103     2.118     1.118         -         -     1.869 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l4_1x1_red       2     0.051     1.029     0.535         -         -     0.665 | G2-im2col+gemm  G2-im2col+gemm    1.00
+resnet50  l4_3x3           2     0.116     1.625     1.869     2.184     1.103     1.747 | G3-winograd-F2  G3-winograd-F2    1.00
+
+Totals over the selected network(s), weighted by layer multiplicity (19.36 GMAC):
+  G1 only 169.65 ms | G2 only 161.75 ms | G3-F4 (else G2) 90.85 ms | G3-F2 (else G2) 96.67 ms
+  auto (cost model) 86.01 ms | measured best per layer 85.49 ms | OpenBLAS im2col+sgemm 228.19 ms
+  auto picked the measured-fastest algorithm on 28/31 layers; auto vs OpenBLAS speed-up 2.65x; effective 450.1 GFLOP/s (direct-conv FLOPs)

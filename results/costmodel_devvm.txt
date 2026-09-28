@@ -1,0 +1,12 @@
+0.068231611  # direct MAC
+12.297145  # direct 6x16 tile
+0.067022302  # gemm MAC
+39.230152  # 6x16 kernel call
+0.19036882  # im2col elem (vector)
+5.1582904  # im2col elem (scalar)
+0.072891406  # winograd GEMM MAC
+21.054511  # F4 input tile*ch
+23.452949  # F4 output tile*ch
+7.4489159  # F2 input tile*ch
+3.0540519  # F2 output tile*ch
+2.068033  # padded-copy elem
